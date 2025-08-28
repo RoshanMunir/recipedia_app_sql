@@ -1,31 +1,29 @@
 const jwt = require("jsonwebtoken");
-require("dotenv").config();
 
-module.exports = (req, res, next) => {
+// Use JWT_SECRET from .env, fallback to a default for safety
+const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+
+// Middleware to protect routes
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "Authorization header missing" });
+  }
+
+  // Expect header format: "Bearer <token>"
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ message: "Token missing" });
+  }
+
   try {
-    // Get token from headers
-    const authHeader = req.headers["authorization"];
-    if (!authHeader) {
-      return res.status(401).json({ message: "Authorization header missing" });
-    }
-
-    // Token format: "Bearer <token>"
-    const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ message: "Token missing" });
-    }
-
-    // Verify token
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ message: "Invalid or expired token" });
-      }
-
-      // Attach user info to request
-      req.user = decoded;
-      next();
-    });
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // store decoded user info for later use
+    next();
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return res.status(401).json({ message: "Invalid or expired token", error });
   }
 };
+
+module.exports = authenticate;
