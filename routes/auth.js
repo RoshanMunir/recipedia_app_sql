@@ -1,10 +1,10 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const db = require("../db"); // your db.js
+const db = require("../db");
 const router = express.Router();
 
-// SIGNUP
+// 📝 SIGNUP
 router.post("/signup", async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -50,6 +50,44 @@ router.post("/signup", async (req, res) => {
     );
   } catch (err) {
     console.error("Signup error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// 🔑 LOGIN
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    db.query("SELECT * FROM users WHERE email = ?", [email], async (err, results) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ message: "Database error", error: err.message });
+      }
+
+      if (results.length === 0) {
+        return res.status(400).json({ message: "Invalid email or password" });
+      }
+
+      const user = results[0];
+
+      // Compare passwords
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: "Invalid email or password" });
+      }
+
+      // Generate token
+      const token = jwt.sign(
+        { id: user.id, email: user.email },
+        process.env.JWT_SECRET || "your_secret_key",
+        { expiresIn: "1h" }
+      );
+
+      res.json({ message: "Login successful", token });
+    });
+  } catch (err) {
+    console.error("Login error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });
