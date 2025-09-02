@@ -1,25 +1,37 @@
 const express = require("express");
+const bodyParser = require("body-parser");
 const dotenv = require("dotenv");
+const cors = require("cors");
+
+// Database connection
+const db = require("./db");
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+
+// ✅ Middleware
+app.use(cors());
+app.use(bodyParser.json());
+
+// ✅ Routes
 const authRoutes = require("./routes/auth");
 const recipeRoutes = require("./routes/recipes");
 const ingredientRoutes = require("./routes/ingredients");
 
-dotenv.config();
-const app = express();
-app.use(express.json());
+// Connect routes
+app.use("/auth", authRoutes);         // Signup/Login
+app.use("/recipes", recipeRoutes);    // Recipes CRUD
+app.use("/ingredients", ingredientRoutes); // Ingredients CRUD
 
-// Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/recipes", recipeRoutes);
-app.use("/api/ingredients", ingredientRoutes);
-
-// Root route
+// ✅ Test route
 app.get("/", (req, res) => {
-  res.send("API is running...");
+  res.send("🍴 Recipe API is running...");
 });
 
-// Start server
+// ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });

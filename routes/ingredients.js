@@ -1,38 +1,42 @@
 const express = require("express");
 const router = express.Router();
-const db = require("../db");
+const Ingredient = require("../models/Ingredient");
 const authenticate = require("../middleware/authenticate");
 
-// Get all ingredients (protected)
-router.get("/", authenticate, (req, res) => {
-  const query = "SELECT * FROM ingredients";
-
-  db.query(query, (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error", error: err });
-    res.json(results);
-  });
+// ✅ Get all ingredients
+router.get("/", authenticate, async (req, res) => {
+  const ingredients = await Ingredient.getAll();
+  res.json(ingredients);
 });
 
-// Get ingredients by recipe ID (protected)
-router.get("/recipe/:recipeId", authenticate, (req, res) => {
-  const recipeId = req.params.recipeId;
-  const query = "SELECT * FROM ingredients WHERE recipe_id = ?";
-
-  db.query(query, [recipeId], (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error", error: err });
-    res.json(results);
-  });
+// ✅ Get ingredient by ID
+router.get("/:id", authenticate, async (req, res) => {
+  const ingredient = await Ingredient.findById(req.params.id);
+  if (!ingredient) return res.status(404).json({ message: "Ingredient not found" });
+  res.json(ingredient);
 });
 
-// Add a new ingredient (protected)
-router.post("/", authenticate, (req, res) => {
-  const { name, quantity, recipe_id } = req.body;
-  const query = "INSERT INTO ingredients (name, quantity, recipe_id) VALUES (?, ?, ?)";
+// ✅ Add new ingredient
+router.post("/", authenticate, async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ message: "Ingredient name is required" });
 
-  db.query(query, [name, quantity, recipe_id], (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error", error: err });
-    res.status(201).json({ message: "Ingredient added", ingredientId: results.insertId });
-  });
+  const result = await Ingredient.create({ name });
+  res.status(201).json({ message: "Ingredient added", ingredientId: result.insertId });
+});
+
+// ✅ Update ingredient
+router.put("/:id", authenticate, async (req, res) => {
+  const success = await Ingredient.update(req.params.id, req.body.name);
+  if (!success) return res.status(404).json({ message: "Ingredient not found" });
+  res.json({ message: "Ingredient updated" });
+});
+
+// ✅ Delete ingredient
+router.delete("/:id", authenticate, async (req, res) => {
+  const success = await Ingredient.delete(req.params.id);
+  if (!success) return res.status(404).json({ message: "Ingredient not found" });
+  res.json({ message: "Ingredient deleted" });
 });
 
 module.exports = router;

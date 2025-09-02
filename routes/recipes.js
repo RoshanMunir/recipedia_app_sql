@@ -1,42 +1,48 @@
 const express = require("express");
-const router = express.Router();
-const db = require("../db");
+const Recipe = require("../models/Recipe");
+const RecipeIngredient = require("../models/RecipeIngredient"); // if file name exactly RecipeIngredient.js
+// small letters
+
 const authenticate = require("../middleware/authenticate");
 
-// Get all recipes (protected)
-router.get("/", authenticate, (req, res) => {
-  const query = "SELECT * FROM recipes";
+const router = express.Router();
 
-  db.query(query, (err, results) => {
-    if (err) {
-      return res.status(500).json({ message: "Database error", error: err });
-    }
-    res.json(results);
-  });
+// 🟢 Helper to calculate difficulty
+function calculateDifficulty(cookTime, ingredientCount) {
+  if (cookTime <= 20 && ingredientCount <= 3) return "Easy";
+  if ((cookTime > 20 && cookTime <= 45) || ingredientCount <= 6) return "Medium";
+  return "Hard";
+}
+
+// ➕ Add recipe
+router.post("/add", authenticate, async (req, res) => {
+  const { name, description, cook_time, baseServings, ingredients } = req.body;
+  const userId = req.user.id;
+
+  if (!name || !cook_time || !baseServings || !ingredients?.length)
+    return res.status(400).json({ message: "Please provide all fields" });
+
+  const difficulty = calculateDifficulty(cook_time, ingredients.length);
+  const recipeResult = await Recipe.create({ userId, name, description, cook_time, baseServings });
+
+  // Add ingredients
+  for (const ing of ingredients) {
+    await RecipeIngredient.add({ recipe_id: recipeResult.insertId, ingredient_id: ing.ingredient_id, quantity: ing.quantity_per_serving });
+  }
+
+  res.status(201).json({ message: "Recipe added successfully", recipeId: recipeResult.insertId, difficulty });
 });
 
-// Get a single recipe by ID (protected)
-router.get("/:id", authenticate, (req, res) => {
-  const recipeId = req.params.id;
-  const query = "SELECT * FROM recipes WHERE id = ?";
-
-  db.query(query, [recipeId], (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error", error: err });
-    if (results.length === 0) return res.status(404).json({ message: "Recipe not found" });
-
-    res.json(results[0]);
-  });
+// 📖 Get all recipes
+router.get("/", async (req, res) => {
+  const recipes = await Recipe.getAll();
+  res.json(recipes);
 });
 
-// Add a new recipe (protected)
-router.post("/", authenticate, (req, res) => {
-  const { name, description } = req.body;
-  const query = "INSERT INTO recipes (name, description) VALUES (?, ?)";
-
-  db.query(query, [name, description], (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error", error: err });
-    res.status(201).json({ message: "Recipe created", recipeId: results.insertId });
-  });
+// 📖 Get user's own recipes
+router.get("/my", authenticate, async (req, res) => {
+  const recipes = await Recipe.getByUserId(req.user.id);
+  res.json(recipes);
 });
 
 module.exports = router;
