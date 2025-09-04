@@ -19,11 +19,13 @@ app.use(bodyParser.json());
 const authRoutes = require("./routes/auth");
 const recipeRoutes = require("./routes/recipes");
 const ingredientRoutes = require("./routes/ingredients");
+const dashboardRoutes = require("./routes/dashboard");
 
 // Connect routes
-app.use("/auth", authRoutes);         // Signup/Login
-app.use("/recipes", recipeRoutes);    // Recipes CRUD
+app.use("/auth", authRoutes);            // Signup/Login
+app.use("/recipes", recipeRoutes);       // Recipes CRUD
 app.use("/ingredients", ingredientRoutes); // Ingredients CRUD
+app.use("/dashboard", dashboardRoutes);  // Dashboard APIs
 
 // ✅ Test route
 app.get("/", (req, res) => {

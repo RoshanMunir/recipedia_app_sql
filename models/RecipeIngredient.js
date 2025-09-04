@@ -36,6 +36,15 @@ const RecipeIngredient = {
     return result.affectedRows > 0;
   },
 
+  // 🆕 Delete all ingredients for a recipe
+  deleteByRecipeId: async (recipe_id) => {
+    const [result] = await pool.query(
+      "DELETE FROM recipe_ingredients WHERE recipe_id = ?",
+      [recipe_id]
+    );
+    return result.affectedRows > 0;
+  },
+
   getRecipesByIngredientId: async (ingredient_id) => {
     const [rows] = await pool.query(
       `SELECT r.* 
