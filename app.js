@@ -1,39 +1,22 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const dotenv = require("dotenv");
-const cors = require("cors");
-
-// Database connection
-const db = require("./db");
-
-// Load environment variables
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
 dotenv.config();
-
 const app = express();
 
-// ✅ Middleware
-app.use(cors());
-app.use(bodyParser.json());
+// middleware
+app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') || '*' }));
+app.use(express.json());
 
-// ✅ Routes
-const authRoutes = require("./routes/auth");
-const recipeRoutes = require("./routes/recipes");
-const ingredientRoutes = require("./routes/ingredients");
-const dashboardRoutes = require("./routes/dashboard");
+// routes
+app.use('/auth', require('./routes/auth'));
+app.use('/recipes', require('./routes/recipes'));
+app.use('/ingredients', require('./routes/ingredients'));
+app.use('/dashboard', require('./routes/dashboard'));
 
-// Connect routes
-app.use("/auth", authRoutes);            // Signup/Login
-app.use("/recipes", recipeRoutes);       // Recipes CRUD
-app.use("/ingredients", ingredientRoutes); // Ingredients CRUD
-app.use("/dashboard", dashboardRoutes);  // Dashboard APIs
+// health
+app.get('/', (_req, res) => res.send('🍴 Recipe API is running.'));
 
-// ✅ Test route
-app.get("/", (req, res) => {
-  res.send("🍴 Recipe API is running...");
-});
-
-// ✅ Start server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-});
+// start
+const PORT = process.env.APP_PORT || process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));

@@ -1,56 +1,82 @@
+// models/recipeIngredient.js
+"use strict";
+
 const pool = require("../db");
 
+// normalize quantity a bit (optional)
+const normQty = (s) => (s ?? "").toString().trim();
+
 const RecipeIngredient = {
-  add: async ({ recipe_id, ingredient_id, quantity }) => {
-    const [result] = await pool.query(
-      "INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (?, ?, ?)",
-      [recipe_id, ingredient_id, quantity]
+  // ➕ Add or update an ingredient in a recipe (idempotent on (recipe_id, ingredient_id))
+  async addOrUpdate({ recipe_id, ingredient_id, quantity, unit = null, note = null }) {
+    const qps = normQty(quantity); // map to quantity_per_serving
+    const [res] = await pool.query(
+      `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity_per_serving, unit, note)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         quantity_per_serving = VALUES(quantity_per_serving),
+         unit = VALUES(unit),
+         note = VALUES(note)`,
+      [recipe_id, ingredient_id, qps || null, unit || null, note || null]
     );
-    return result;
+    return { affectedRows: res.affectedRows, insertId: res.insertId };
   },
 
-  getByRecipeId: async (recipe_id) => {
+  // 📖 Ingredients for a recipe (alias to quantity for the app)
+  async getByRecipeId(recipe_id) {
     const [rows] = await pool.query(
-      `SELECT i.name, ri.quantity
+      `SELECT
+         i.id,
+         i.name,
+         ri.quantity_per_serving AS quantity,
+         ri.unit,
+         ri.note
        FROM recipe_ingredients ri
        JOIN ingredients i ON ri.ingredient_id = i.id
-       WHERE ri.recipe_id = ?`,
+       WHERE ri.recipe_id = ?
+       ORDER BY i.name ASC`,
       [recipe_id]
     );
     return rows;
   },
 
-  update: async ({ recipe_id, ingredient_id, quantity }) => {
-    const [result] = await pool.query(
-      "UPDATE recipe_ingredients SET quantity = ? WHERE recipe_id = ? AND ingredient_id = ?",
-      [quantity, recipe_id, ingredient_id]
+  // ✏️ Update a single pair
+  async update({ recipe_id, ingredient_id, quantity, unit = null, note = null }) {
+    const qps = normQty(quantity);
+    const [res] = await pool.query(
+      `UPDATE recipe_ingredients
+         SET quantity_per_serving = ?, unit = ?, note = ?
+       WHERE recipe_id = ? AND ingredient_id = ?`,
+      [qps || null, unit || null, note || null, recipe_id, ingredient_id]
     );
-    return result.affectedRows > 0;
+    return { updated: res.affectedRows > 0 };
   },
 
-  delete: async ({ recipe_id, ingredient_id }) => {
-    const [result] = await pool.query(
+  // ❌ Delete one ingredient from a recipe
+  async delete({ recipe_id, ingredient_id }) {
+    const [res] = await pool.query(
       "DELETE FROM recipe_ingredients WHERE recipe_id = ? AND ingredient_id = ?",
       [recipe_id, ingredient_id]
     );
-    return result.affectedRows > 0;
+    return { deleted: res.affectedRows > 0 };
   },
 
-  // 🆕 Delete all ingredients for a recipe
-  deleteByRecipeId: async (recipe_id) => {
-    const [result] = await pool.query(
+  // ❌ Delete all ingredients for a recipe
+  async deleteByRecipeId(recipe_id) {
+    const [res] = await pool.query(
       "DELETE FROM recipe_ingredients WHERE recipe_id = ?",
       [recipe_id]
     );
-    return result.affectedRows > 0;
+    return { deletedCount: res.affectedRows };
   },
 
-  getRecipesByIngredientId: async (ingredient_id) => {
+  // 📖 Recipes that use a given ingredient
+  async getRecipesByIngredientId(ingredient_id) {
     const [rows] = await pool.query(
-      `SELECT r.* 
-       FROM recipe_ingredients ri
-       JOIN recipes r ON ri.recipe_id = r.id
-       WHERE ri.ingredient_id = ?`,
+      `SELECT r.*
+         FROM recipe_ingredients ri
+         JOIN recipes r ON ri.recipe_id = r.id
+        WHERE ri.ingredient_id = ?`,
       [ingredient_id]
     );
     return rows;

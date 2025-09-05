@@ -1,70 +1,111 @@
+// models/Ingredients.js
+"use strict";
+
 const pool = require("../db");
 
-const Ingredient = {
-  // ➕ Add new ingredient
-  create: async ({ name }) => {
+// normalize: trim + collapse inner whitespace
+const normalize = (s) => (s ?? "").trim().replace(/\s+/g, " ");
+const clamp = (n, min, max) => Math.max(min, Math.min(max, Number(n)));
+
+const Ingredients = {
+  // ➕ Create (idempotent): returns { id, created }
+  async create({ name }) {
+    const n = normalize(name);
+    if (!n) throw new Error("Ingredient name required");
+
     const [result] = await pool.query(
-      "INSERT INTO ingredients (name) VALUES (?)",
-      [name]
+      `INSERT INTO ingredients (name) VALUES (?)
+       ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+      [n]
     );
-    return result;
+    // affectedRows === 1 → inserted; === 2 → duplicate path
+    return { id: result.insertId, created: result.affectedRows === 1 };
   },
 
-  // 📖 Get all ingredients (sorted by name)
-  getAll: async () => {
+  // 📖 Paginated list
+  async getAll({ limit = 50, offset = 0 } = {}) {
+    const lim = clamp(limit, 1, 200);
+    const off = Math.max(0, Number(offset));
     const [rows] = await pool.query(
-      "SELECT * FROM ingredients ORDER BY name ASC"
+      "SELECT id, name FROM ingredients ORDER BY name ASC LIMIT ? OFFSET ?",
+      [lim, off]
     );
     return rows;
   },
 
-  // 📖 Find ingredient by ID
-  findById: async (id) => {
+  // 📖 Find by id
+  async findById(id) {
     const [rows] = await pool.query(
-      "SELECT * FROM ingredients WHERE id = ?",
-      [id]
+      "SELECT id, name FROM ingredients WHERE id = ?",
+      [Number(id)]
     );
-    return rows[0];
+    return rows[0] || null;
   },
 
-  // ✏️ Update ingredient
-  update: async (id, name) => {
-    const [result] = await pool.query(
-      "UPDATE ingredients SET name = ? WHERE id = ?",
-      [name, id]
-    );
-    return result.affectedRows > 0;
+  // ✏️ Update with duplicate handling
+  async update(id, name) {
+    const n = normalize(name);
+    if (!n) throw new Error("Ingredient name required");
+
+    try {
+      const [res] = await pool.query(
+        "UPDATE ingredients SET name = ? WHERE id = ?",
+        [n, Number(id)]
+      );
+      if (res.affectedRows === 0) {
+        const current = await this.findById(id);
+        if (!current) return { updated: false, reason: "not_found" };
+        if (current.name === n) return { updated: false, reason: "no_change" };
+      }
+      return { updated: true };
+    } catch (e) {
+      if (e && (e.code === "ER_DUP_ENTRY" || e.errno === 1062)) {
+        return { updated: false, reason: "duplicate" };
+      }
+      throw e;
+    }
   },
 
-  // ❌ Delete ingredient
-  delete: async (id) => {
-    const [result] = await pool.query(
-      "DELETE FROM ingredients WHERE id = ?",
-      [id]
-    );
-    return result.affectedRows > 0;
+  // ❌ Delete with clear return shape
+  async delete(id) {
+    try {
+      const [res] = await pool.query("DELETE FROM ingredients WHERE id = ?", [Number(id)]);
+      if (res.affectedRows === 0) return { deleted: false, reason: "not_found" };
+      return { deleted: true };
+    } catch (e) {
+      // FK violation if used by recipes
+      if (e && (e.code === "ER_ROW_IS_REFERENCED_2" || e.errno === 1451)) {
+        return { deleted: false, reason: "in_use" };
+      }
+      throw e;
+    }
   },
 
-  // 📖 Get ingredients by recipe ID
-  getByRecipeId: async (recipeId) => {
+  // 🔍 Typeahead (prefix search)
+  async searchByName(keyword, limit = 20) {
+    const q = normalize(keyword);
+    const lim = clamp(limit, 1, 50);
     const [rows] = await pool.query(
-      `SELECT i.* 
-       FROM recipe_ingredients ri
-       JOIN ingredients i ON ri.ingredient_id = i.id
-       WHERE ri.recipe_id = ?`,
-      [recipeId]
+      "SELECT id, name FROM ingredients WHERE name LIKE CONCAT(?, '%') ORDER BY name ASC LIMIT ?",
+      [q, lim]
     );
     return rows;
   },
 
-  // 🔍 Search ingredients by name
-  searchByName: async (keyword) => {
+  // 📖 Ingredients for a recipe (match your DB: quantity_per_serving → quantity)
+  async getByRecipeId(recipeId) {
     const [rows] = await pool.query(
-      "SELECT * FROM ingredients WHERE name LIKE ?",
-      [`%${keyword}%`]
+      `SELECT i.id, i.name,
+              ri.quantity_per_serving AS quantity,
+              ri.unit, ri.note
+         FROM recipe_ingredients ri
+         JOIN ingredients i ON ri.ingredient_id = i.id
+        WHERE ri.recipe_id = ?
+        ORDER BY i.name ASC`,
+      [Number(recipeId)]
     );
     return rows;
   },
 };
 
-module.exports = Ingredient;
+module.exports = Ingredients;

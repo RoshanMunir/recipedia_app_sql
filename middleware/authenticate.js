@@ -1,19 +1,18 @@
-const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+const jwt = require('jsonwebtoken');
 
-const authenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ message: "Authorization header missing" });
+module.exports = function authenticate(req, res, next) {
+  const hdr = req.headers.authorization || '';
+  const match = hdr.match(/^Bearer\s+(.+)$/i);
+  if (!match) return res.status(401).json({ message: 'Authorization header missing or malformed' });
 
-  const token = authHeader.split(" ")[1];
-  if (!token) return res.status(401).json({ message: "Token missing" });
+  const token = match[1].trim();
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return res.status(500).json({ message: 'Server misconfigured: JWT secret not set' });
 
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.user = jwt.verify(token, secret); // {userId, role, ...}
     next();
-  } catch (error) {
-    res.status(401).json({ message: "Invalid or expired token", error });
+  } catch {
+    return res.status(401).json({ message: 'Invalid or expired token' });
   }
 };
-
-module.exports = authenticate;

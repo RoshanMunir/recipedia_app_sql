@@ -4,33 +4,33 @@ const authenticate = require("../middleware/authenticate");
 
 const router = express.Router();
 
-// 🟢 Get liked recipes (only logged-in user)
+// 🟢 Liked recipes (auth required)
 router.get("/liked", authenticate, async (req, res) => {
   try {
-    const liked = await Dashboard.getLikedRecipes(req.user.id);
+    const liked = await Dashboard.getLikedRecipes(req.user.userId); // fixed key
     res.json(liked);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+  } catch {
+    res.status(500).json({ message: "Failed to fetch liked recipes" });
   }
 });
 
-// 🟢 Get recipes by category
+// 🟢 Recipes by category (public)
 router.get("/category/:category", async (req, res) => {
   try {
     const recipes = await Dashboard.getRecipesByCategory(req.params.category);
     res.json(recipes);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+  } catch {
+    res.status(500).json({ message: "Failed to fetch recipes by category" });
   }
 });
 
-// 🟢 Get recommended recipes
-router.get("/recommended", async (req, res) => {
+// 🟢 Recommended recipes (public)
+router.get("/recommended", async (_req, res) => {
   try {
     const recipes = await Dashboard.getRecommendedRecipes();
     res.json(recipes);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+  } catch {
+    res.status(500).json({ message: "Failed to fetch recommended recipes" });
   }
 });
 
